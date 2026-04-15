@@ -1,7 +1,7 @@
 # Procedural Track Generation
 
-Curriculum-based procedural track generation for RL agent training.
-Intended use for WheeledLab on semantic navigation. NOTE: all images in ReadMe have colors inverted for readability.
+Procedural track generation for RL agent training. Wrapped in curriculum config to increment track 
+feature difficulty and phase shift to closed loop tracks
 
 ![Curriculum Progression](img/curriculum_progression.png)
 
