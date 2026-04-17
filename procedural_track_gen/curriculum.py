@@ -61,8 +61,7 @@ class CurriculumConfig:
             dp = d / self.phase_boundary  # normalise within Phase 1
             if self.n_segments is None:
                 self.n_segments = int(np.interp(dp, [0, 1], [4, 12]))
-            if self.segment_length is None:
-                self.segment_length = 20.0 
+            # segment_length resolved in generate_chain (depends on env_size)
             if self.intensity_range is None:
                 lo = float(np.interp(dp, [0, 1], [0.15, 0.50]))
                 hi = float(np.interp(dp, [0, 1], [0.40, 1.00]))
@@ -86,8 +85,7 @@ class CurriculumConfig:
 
 
 def generate_track(
-    map_size:  tuple[int, int]     = (500, 500),
-    spacing:   tuple[float, float] = (0.3, 0.3),
+    env_size = (100, 100),
     config:    CurriculumConfig    = None,
 ) -> tuple[np.ndarray, dict]:
     """
@@ -101,39 +99,37 @@ def generate_track(
         config = CurriculumConfig()
     config.resolve()
 
-    num_rows, num_cols = map_size
-    width  = num_cols * spacing[1]
-    height = num_rows * spacing[0]
+    rows, cols = env_size
 
     if config.is_chain:
-        return generate_chain(config, width, height)
+        return generate_chain(config, rows, cols)
     else:
-        return generate_loop(config, width, height)
+        return generate_loop(config, rows, cols)
 
 
-def generate_chain(config, width, height):
-    """Phase 1: chain builder""" 
-    start_pos = np.array([width / 2, height * 0.85])
-    start_tan = np.array([0.0, -1.0]) * config.segment_length #go down
+def generate_chain(config, rows, cols):
+    """Phase 1: chain builder"""
+    if config.segment_length is None:
+        config.segment_length = min(rows, cols) * 0.15
+
+    start_pos = np.array([cols * 0.2, rows * 0.5])
+    start_tan = np.array([1.0, 0.0]) * config.segment_length
 
     segments, feat_log = build_chain(
         config.n_segments, config.segment_length,
-        config.difficulty, config.intensity_range,
+        config.difficulty, cols, rows,
+        config.intensity_range,
         start_pos, start_tan,
     )
     polyline = build_polylines(segments, config.steps_per_segment)
-
-    # fit polyline into a tight bounding box for rasterisation
-    xs = [p[0] for p in polyline]
-    ys = [p[1] for p in polyline]
-    pad = config.segment_length
-    min_x, max_x = min(xs) - pad, max(xs) + pad
-    min_y, max_y = min(ys) - pad, max(ys) + pad
-    w, h = max_x - min_x, max_y - min_y
-    shifted = [(p[0] - min_x, p[1] - min_y) for p in polyline]
+    if len(polyline) == 0:
+        polyline = [(cols * 0.5, rows * 0.15), (cols * 0.5, rows * 0.85)]
+        feat_log = [{"feature": "straight", "intensity": 0.0}]
+    temp = np.array(polyline)
+    line_norm = list(map(tuple, temp / np.array([cols, rows])))
 
     grid = rasterise_track(
-        shifted, config.grid_size, config.track_width, w, h, closed=False)
+        line_norm, rows, cols, config.track_width, closed=False)
 
     return grid, {
         "phase": "chain",
@@ -143,19 +139,20 @@ def generate_chain(config, width, height):
     }
 
 
-def generate_loop(config, width, height):
+def generate_loop(config, rows, cols):
     """Phase 2: closed loop full track."""
     raw = generate_points(
-        config.n_control_points, width, height,
-        config.min_radius, margin=width * 0.05,
+        config.n_control_points, cols, rows,
+        config.min_radius, margin=cols * 0.05,
         max_jitter=config.max_jitter,
     )
     pts = sort_clockwise(raw)
     segments = build_spline(pts)
     polyline = build_polylines(segments, config.steps_per_segment)
+    temp = np.array(polyline) 
+    line_norm = list(map(tuple, temp / np.array([cols, rows])))
     grid = rasterise_track(
-        polyline, config.grid_size, config.track_width,
-        width, height, closed=True)
+        line_norm, rows, cols, config.track_width, closed=True)
 
     return grid, {
         "phase": "loop",

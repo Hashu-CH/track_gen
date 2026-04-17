@@ -103,6 +103,8 @@ def build_chain(
     n_segments: int,
     segment_length: float,
     difficulty: float,
+    cols,
+    rows,
     intensity_range: tuple[float, float],
     start_pos: np.ndarray = None,
     start_tan: np.ndarray = None,
@@ -132,10 +134,14 @@ def build_chain(
             feat_name, intensity, pos, tan, seg_len, track_points,
         )
 
-        # grow the polyline for future intersection checks
+        # STOP loop if new points would go outside of environment
         new_pts = np.array(build_polylines(segs))
+        if not np.all((0 <= new_pts[:, 0]) & (new_pts[:, 0] < cols)) or \
+           not np.all((0 <= new_pts[:, 1]) & (new_pts[:, 1] < rows)):
+            break
         if len(track_points) > 0:
             new_pts = new_pts[1:]  # skip shared end/start point
+        
         track_points = np.vstack([track_points, new_pts]) if len(track_points) > 0 else new_pts
 
         all_segments.extend(segs)

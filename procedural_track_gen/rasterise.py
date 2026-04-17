@@ -10,10 +10,9 @@ from scipy.ndimage import binary_dilation
 
 def rasterise_track(
     track: list[tuple[float, float]],
-    grid_size: int,
+    rows,
+    cols,
     track_width: int,
-    width: float,
-    height: float,
     closed: bool = True,
 ) -> np.ndarray:
     """
@@ -21,33 +20,22 @@ def rasterise_track(
     asymmetric kernel.
 
     Args:
-        track:       list of (x, y) world-space points
+        track:       list of (x, y) world-space points (NORAMLIZED)
         grid_size:   resolution of the longer grid axis
         track_width: width in tiles (larger → easier)
-        width:       world-space bounding box width
-        height:      world-space bounding box height
+        env_size:    widht height grid output size
         closed:      if True, connect last point back to first
 
     Returns:
         boolean numpy array — True = traversable
     """
-    aspect = width / height
-    if width >= height:
-        cols = grid_size
-        rows = max(1, int(grid_size / aspect))
-    else:
-        rows = grid_size
-        cols = max(1, int(grid_size * aspect))
-
     grid = np.zeros((rows, cols), dtype=bool)
-    sx, sy = cols / width, rows / height
     n = len(track)
     end = n if closed else n - 1
 
     for i in range(end):
-        # take polyline and scale to grid sizes
-        ax, ay = track[i][0] * sx, track[i][1] * sy
-        bx, by = track[(i + 1) % n][0] * sx, track[(i + 1) % n][1] * sy
+        ax, ay = track[i][0] * cols, track[i][1] * rows
+        bx, by = track[(i + 1) % n][0] * cols, track[(i + 1) % n][1] * rows
         steps = max(int(math.hypot(bx - ax, by - ay)) * 2, 1)
         for s in range(steps + 1):
             t = s / steps
